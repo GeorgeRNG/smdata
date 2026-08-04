@@ -17,7 +17,17 @@ def main():
     path = sys.argv[1] if len(sys.argv) >= 2 else input("Enter save path: ")
     db = sqlite3.connect(path)
 
-    random_colors(db)
+def move_everything_up(db):
+    bodies = db.execute("SELECT rowid, data from RigidBody").fetchall()
+    
+    for (rowid, bytess) in bodies:
+        print(bytess.hex())
+        rb = RigidBody(bytess)
+
+        rb.z += 30
+
+        db.execute("UPDATE RigidBody SET data=? WHERE rowid=?",[rb.make(),rowid])
+        db.commit()
 
 def random_colors(db):
     q = db.execute("SELECT rowid, data FROM ChildShape")

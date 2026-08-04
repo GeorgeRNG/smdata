@@ -1,5 +1,58 @@
 from struct import pack, unpack, calcsize
 
+class RigidBody:
+    struct = ">2s B I H 16s H 4f 3f"
+
+    def __init__(self, data: bytes):
+        self.header: bytes
+        self.a: bytes
+        self.id: int
+        self.worldid: int
+        self.id_b: bytes
+        self.pad: int
+        self.qA: float
+        self.qB: float
+        self.qC: float
+        self.qD: float
+        """East"""
+        self.x: float
+        """North"""
+        self.y: float
+        """Altitude"""
+        self.z: float
+        self.data: RigidBodyData
+        start = calcsize(self.struct)
+        (self.header,self.a,self.id,self.worldid,self.id_b,self.pad,self.qA,self.qB,self.qC,self.qD,self.x,self.y,self.z) = list(unpack(self.struct, data[ : start]))
+        if self.header == RigidBodyStatic.header: self.data = RigidBodyStatic(data[start :])
+        if self.header == RigidBodyMobile.header: self.data = RigidBodyMobile(data[start :])
+
+        #                                                             [quaternion rotation              ] [xyz                     ]
+        # 0002 01 00000043 0000 c27c7d3fc289cbbec1832452c19b954c 0000 3c4e1e8f b932fa16 bbb42435 3f7ff9d2 c1857fbe c2873662 bf89a19e 00000000000000000000000000000000000000000000000000
+        # 0001 01 000000bc 0000 42b17df442b1020c42f7fdf442f7020c 0000 3f800000 00000000 00000000 00000000 42f00000 42b00000 00000000 00ffffffff
+
+    def make(self) -> bytes:
+        return pack(self.struct, self.header,self.a,self.id,self.worldid,self.id_b,self.pad,self.qA,self.qB,self.qC,self.qD,self.x,self.y,self.z) + self.data.make()
+
+class RigidBodyData:
+    def __init__(self, data: bytes):
+        raise NotImplementedError()
+    def make(self) -> bytes:
+        raise NotImplementedError()
+class RigidBodyStatic(RigidBodyData):
+    struct = "25s"
+    header = b"\x00\x01"
+    def __init__(self, data):
+        self.data: bytes = data
+    def make(self):
+        return self.data
+class RigidBodyMobile(RigidBodyData):
+    struct = "5s"
+    header = b"\x00\x02"
+    def __init__(self, data):
+        self.data: bytes = data
+    def make(self):
+        return self.data
+
 """
 Every part, wedge, and stretch of blocks is its own ChildShape
 Blocks will automatically simplify themself (merge with other blocks to keep the minimum amount of blocks)
