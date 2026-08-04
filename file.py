@@ -17,6 +17,22 @@ def main():
     path = sys.argv[1] if len(sys.argv) >= 2 else input("Enter save path: ")
     db = sqlite3.connect(path)
 
+    raise_deadbags(db, shapesets)
+
+def raise_deadbags(db: sqlite3.Connection, shapesets):
+    bag = itemid_from_shapeuuid(shape_from_shapesets_via_name(shapesets, "obj_survivalobject_kobag")["uuid"])
+
+    for (bodyId,data) in db.execute("SELECT bodyId, data FROM ChildShape").fetchall():
+        cs = ChildShape(data)
+        if cs.shape == bag:
+            print("bag!!")
+            (rowid, data) = db.execute("SELECT rowid, data FROM RigidBody WHERE id=?",[int(bodyId)]).fetchone()
+            rb = RigidBody(data)
+            rb.z += 50
+            db.execute("UPDATE RigidBody SET data=? WHERE rowid=?",[rb.make(),rowid])
+            db.commit()
+            return
+
 def move_everything_up(db):
     bodies = db.execute("SELECT rowid, data from RigidBody").fetchall()
     

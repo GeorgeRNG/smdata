@@ -63,7 +63,10 @@ def shape_from_shapesets_via_uuid(shapesets, _uuid: uuid.UUID):
     for shape in shapesets[ITEMS]:
         if uuid.UUID(shape["uuid"]) == _uuid:
             return shape
-
+def shape_from_shapesets_via_name(shapesets, name: str):
+    for shape in shapesets[ITEMS]:
+        if "name" in shape and shape["name"] == name:
+            return shape
 
 # Maybe only a user's data?
 genericdata = ">16s 2s I 2s 9s 3f 4s 2f 4s 20s 4s"
