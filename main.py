@@ -1,7 +1,6 @@
 import sqlite3
 import sys
 from sm import *
-from database import *
 import json
 import random
 
@@ -12,15 +11,15 @@ def main():
     game_dir = config["game_dir"]
     data_source = config["data_source"]
 
-    shapesets = load_shapesets(game_dir, data_source)
+    shapesets = ShapeSets(game_dir, data_source)
 
     path = sys.argv[1] if len(sys.argv) >= 2 else input("Enter save path: ")
     db = sqlite3.connect(path)
 
     raise_deadbags(db, shapesets)
 
-def raise_deadbags(db: sqlite3.Connection, shapesets):
-    bag = itemid_from_shapeuuid(shape_from_shapesets_via_name(shapesets, "obj_survivalobject_kobag")["uuid"])
+def raise_deadbags(db: sqlite3.Connection, shapesets: ShapeSets):
+    bag = uuid_to_byteid(shapesets.shape_from_name("obj_survivalobject_kobag")["uuid"])
 
     for (bodyId,data) in db.execute("SELECT bodyId, data FROM ChildShape").fetchall():
         cs = ChildShape(data)
