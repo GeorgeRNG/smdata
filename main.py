@@ -16,21 +16,57 @@ def main():
     path = sys.argv[1] if len(sys.argv) >= 2 else input("Enter save path: ")
     db = sqlite3.connect(path)
 
-    raise_deadbags(db, shapesets)
+    raise_deadbags(db, shapesets, DEADBAG_NEWEST)
 
-def raise_deadbags(db: sqlite3.Connection, shapesets: ShapeSets):
+def encrypt_everything(db: sqlite3.Connection):
+    for (rowid, data) in db.execute("SELECT rowid, data FROM RigidBody").fetchall():
+        rb = RigidBody(data)
+        print(rb.make() == data)
+        if True:
+            rb.data.flags = 0xff
+
+            db.execute("UPDATE RigidBody SET data=? WHERE rowid=?",[rb.make(),rowid])
+            print(rowid, rb.id)
+    db.commit()
+
+DEADBAG_RAISE_50 = 1
+DEADBAG_RAISE_100 = 2
+DEADBAG_SHIP = 2
+DEADBAG_NEWEST = 3
+def raise_deadbags(db: sqlite3.Connection, shapesets: ShapeSets, method: int):
     bag = uuid_to_byteid(shapesets.shape_from_name("obj_survivalobject_kobag")["uuid"])
 
+    x = -2354.0
+    y = -2622.5
+    z = 10
+
+    if method == DEADBAG_NEWEST:
+        (data,) = db.execute("SELECT data FROM RigidBody ORDER BY id DESC LIMIT 1").fetchone()
+        rb = RigidBody(data)
+        x = rb.x
+        y = rb.y
+        z = rb.z + 2
+    
     for (bodyId,data) in db.execute("SELECT bodyId, data FROM ChildShape").fetchall():
         cs = ChildShape(data)
         if cs.shape == bag:
-            print("bag!!")
             (rowid, data) = db.execute("SELECT rowid, data FROM RigidBody WHERE id=?",[int(bodyId)]).fetchone()
             rb = RigidBody(data)
-            rb.z += 50
+            if method == DEADBAG_RAISE_50 or method == DEADBAG_RAISE_100:
+                rb.z += 50 if method == DEADBAG_RAISE_50 else 100
+            elif method == DEADBAG_SHIP or method == DEADBAG_NEWEST:
+                rb.x = x
+                rb.y = y
+                rb.z = z
+                y+=2
+            else:
+                print("raise_deadbags: invalid method")
+                exit(2)
+                return
+            
+            print(f"found bag rowid {rowid}\nold {data.hex()}\nnew {rb.make().hex()}")
             db.execute("UPDATE RigidBody SET data=? WHERE rowid=?",[rb.make(),rowid])
-            db.commit()
-            return
+    db.commit()
 
 def move_everything_up(db):
     bodies = db.execute("SELECT rowid, data from RigidBody").fetchall()
