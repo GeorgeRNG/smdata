@@ -4,20 +4,22 @@ from structs import *
 class RigidBody:
     struct = ">2s B I H 16s H 4f 3f"
 
-    FLAG_DISABLE_BREAKING = 2**0
+    RESTRICT_ERASABLE = 2**0
     """Players cannot break blocks, uses the encryptor's hexagonal shields and sounds when trying"""
-    FLAG_DISABLE_PLACING = 2**1
+    RESTRICT_BUILDABLE = 2**1
     """Players cannot place blocks, see the placing or breaking overlays, or use the weld tool (unless the creation is on a lift, in which case the weld tool can merge neighbouring pieces on joints albeit it with some missing particles)"""
-    FLAG_DISABLE_PAINTING = 2**2
+    RESTRICT_PAINTABLE = 2**2
     """Players cannot use the paint gun to paint or unpaint"""
-    FLAG_DISABLE_CONNECTION = 2**3
+    RESTRICT_CONNECTABLE = 2**3
     """Players cannot see connections or edit connections"""
-    FLAG_DISABLE_LIFT = 2**4
+    RESTRICT_LIFTABLE = 2**4
     """Players cannot put free moving creations on the lift"""
-    FLAG_DISABLE_CONFIGURE = 2**5
+    RESTRICT_USABLE = 2**5
     """Players cannot access the configuration or upgrade screen for parts, but can still use parts"""
-    FLAG_DISABLE_DAMAGE = 2**6
+    RESTRICT_DESTRUCTABLE = 2**6
     """Explosions, melee, and projectiles cannot damage blocks, and enemies do not consider attacking blocks"""
+    RESTRICT_CONVERTIBLE_TO_DYNAMIC = 2**7
+    """Breaking the support for these creations do not make them dynamic. If they are split into two different bodies, one will become dynamic"""
 
     def __init__(self, data: bytes):
         self.header: bytes
@@ -68,20 +70,20 @@ class RigidBodyStatic(RigidBodyData):
     struct = "B 4s"
     header = b"\x00\x01"
     def __init__(self, data):
-        self.flags: int
+        self.restrictions: int
         self.data: bytes
-        (self.flags,self.data) = unpack(self.struct,data)
+        (self.restrictions,self.data) = unpack(self.struct,data)
     def make(self):
-        return pack(self.struct, self.flags, self.data)
+        return pack(self.struct, self.restrictions, self.data)
 class RigidBodyMobile(RigidBodyData):
     struct = "24s B"
     header = b"\x00\x02"
     def __init__(self, data):
         self.data: bytes
-        self.flags: int
-        (self.data, self.flags) = unpack(self.struct,data)
+        self.restrictions: int
+        (self.data, self.restrictions) = unpack(self.struct,data)
     def make(self):
-        return pack(self.struct, self.data, self.flags)
+        return pack(self.struct, self.data, self.restrictions)
 
 """
 Every part, wedge, and stretch of blocks is its own ChildShape

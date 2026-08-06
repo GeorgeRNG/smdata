@@ -35,12 +35,10 @@ def stack(db: sqlite3.Connection, shapesets: ShapeSets):
 def encrypt_everything(db: sqlite3.Connection):
     for (rowid, data) in db.execute("SELECT rowid, data FROM RigidBody").fetchall():
         rb = RigidBody(data)
-        print(rb.make() == data)
         if True:
-            rb.data.flags = 0xff
+            rb.data.restrictions = 0xff
 
             db.execute("UPDATE RigidBody SET data=? WHERE rowid=?",[rb.make(),rowid])
-            print(rowid, rb.id)
     db.commit()
 
 DEADBAG_RAISE_50 = 1
