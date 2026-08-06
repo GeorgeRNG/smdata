@@ -16,7 +16,21 @@ def main():
     path = sys.argv[1] if len(sys.argv) >= 2 else input("Enter save path: ")
     db = sqlite3.connect(path)
 
-    raise_deadbags(db, shapesets, DEADBAG_NEWEST)
+    encrypt_everything(db)
+    # stack(db,shapesets)
+    # read_all_containers(db,shapesets)
+    # raise_deadbags(db, shapesets, DEADBAG_NEWEST)
+
+def stack(db: sqlite3.Connection, shapesets: ShapeSets):
+    q = db.execute("SELECT rowid,data FROM Container")
+    for (rowid,data) in q.fetchall():
+        container = Container(data)
+        for item in container.items:
+            shape = shapesets.shape(item.id.get())
+            if shape and "stackSize" in shape:
+                item.count.set(shape["stackSize"] * 3)
+        db.execute("UPDATE Container SET data=? WHERE rowid=?",[container.make(),rowid])
+    db.commit()
 
 def encrypt_everything(db: sqlite3.Connection):
     for (rowid, data) in db.execute("SELECT rowid, data FROM RigidBody").fetchall():
@@ -92,14 +106,16 @@ def random_colors(db):
         db.execute("UPDATE ChildShape SET data=? WHERE rowid=?",[cs.make(),rowid])
     db.commit()
 
-def read_all_containers(db,shapesets):
+def read_all_containers(db: sqlite3.Connection, shapesets: ShapeSets):
     q = db.execute("SELECT data FROM Container")
-    for container in q.fetchall():
-        container = Container(container[0])
+    for (data,) in q.fetchall():
+        container = Container(data)
         for item in container.items:
-            item = shape_from_shapesets_via_item(shapesets, item[0])
-            if item is not None:
-                print(item["name"])
+            shape = shapesets.shape(item.id.value)
+            if shape is not None:
+                print(shape["name"])
+            else:
+                print(item.id.value.hex())
 
 def read_userpos(db):
     q = db.execute("SELECT uid,key,data FROM GenericData where worldId = 65534 and flags = 3")

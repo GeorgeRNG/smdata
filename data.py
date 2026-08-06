@@ -1,4 +1,5 @@
 from struct import pack, unpack, calcsize
+from structs import *
 
 class RigidBody:
     struct = ">2s B I H 16s H 4f 3f"
@@ -161,61 +162,34 @@ class ChildShapeWedge(ChildShapeData):
     def make(self):
         return pack(self.struct,self.length,self.width,self.height,self.rotation)
 
+class Item(Struct):
+    def __members__(self):
+        self.id =      self.add(STRING(16))
+        self.divider = self.add(STRING(4))
+        self.count =   self.add(SHORT)
 
-class Item:
-    struct = ">16s 4s H"
+class ContainerHeader(Struct):
+    def __members__(self):
+        self.header =  self.add(STRING(3))
+        self.id =      self.add(INT)
+        self.divider = self.add(STRING(1))
+        self.size =    self.add(BYTE)
+        self.a =       self.add(STRING(2))
 
-    def __init__(self, data: bytes):
-        self.id: bytes
-        self.count: int
-        
-        (self.id,_,self.count) = unpack(self.struct, data)
-
-    def make(self) -> bytes:
-        return pack(self.struct,
-        self.id,
-        b"\xff\xff\xff\xff",
-        self.count
-    )
-
-class ContainerHeader:
-    struct = ">3s I 1s B 2s"
-
+class Container(Parsable):
     def __init__(self, data):
-        self.id: int
-        self.size: int
-        self.a: bytes
-
-        (_, self.id, _, self.size, self.a) = unpack(self.struct, data)
-    def make(self):
-        return pack(
-            self.struct,
-            b"\x04\x00\x01", # Header?
-            self.id,
-            b"\x00",
-            self.size,
-            self.a
-        )
-
-class Container:
-
-    def __init__(self, data):
-        self.header: ContainerHeader
+        self.header = ContainerHeader(data)
+        offset = self.header.calcsize()
         self.items: list[Item] = []
-
-        offset = calcsize(ContainerHeader.struct)
-        self.header = ContainerHeader(data[:offset])
-        size = self.header.size
-        for _ in range(size):
-            end = offset + calcsize(Item.struct)
-            item = Item(data[offset:end])
+        for _ in range(self.header.size.value):
+            item = Item(data[offset:])
             self.items.append(item)
-            offset = end
+            offset+=item.calcsize()
+        self.a = data[offset:]
 
     def make(self):
-        assert len(self.items) == self.header.size, f"len(self.items) = {len(self.items)} but it should be {self.header.size}"
         container = self.header.make()
         for item in self.items:
             container += item.make()
-        container += b"\x00\x00"
+        container += self.a
         return container
