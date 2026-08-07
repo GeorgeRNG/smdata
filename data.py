@@ -166,7 +166,7 @@ class ChildShapeWedge(ChildShapeData):
 
 class Item(Struct):
     def __members__(self):
-        self.id =      self.add(STRING(16))
+        self.id =      self.add(BYTE_ID)
         self.divider = self.add(STRING(4))
         self.count =   self.add(SHORT)
 
