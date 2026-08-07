@@ -19,10 +19,18 @@ def main():
 
     # encrypt_everything(db)
     # inv_size(db, 60)
-    stack(db,shapesets,1)
+    # stack(db,shapesets,1)
     # read_all_containers(db,shapesets)
     # raise_deadbags(db, shapesets, DEADBAG_NEWEST)
-    replace_item(db, "8e61a423-5aa6-4dd3-ac57-ecac313f82f5",1,"5530e6a0-4748-4926-b134-50ca9ecb9dcf",0xffff)
+    # replace_item(db, "8e61a423-5aa6-4dd3-ac57-ecac313f82f5",1,"5530e6a0-4748-4926-b134-50ca9ecb9dcf",0xffff)
+
+def print_unit_pos(db:sqlite3.Connection):
+    for (rowid,data) in db.execute("SELECT rowid,data FROM unit"):
+        u = Unit(data)
+        print(u.pos_x.get(), u.pos_y.get(), u.pos_z.get(), u.rotation.get())
+        # db.execute("UPDATE Unit SET data=? WHERE rowid=?",[u.make(),rowid])
+    # if input() == "w":
+        # db.commit()
 
 def replace_item(db: sqlite3.Connection, input: ID, input_count: int, output: ID, output_count: int):
     for (rowid,data) in db.execute("SELECT rowid,data FROM Container").fetchall():
