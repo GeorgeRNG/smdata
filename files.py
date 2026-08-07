@@ -7,6 +7,7 @@ from pathlib import Path
 from uuid import UUID
 import typing
 import json
+from files import *
 
 class Paths:
     def __init__(self, game_dir):
@@ -28,9 +29,9 @@ def uuid_to_byteid(uuid: UUID) -> bytes:
 def byteid_to_uuid(data: bytes) -> UUID:
     return UUID(int=int.from_bytes(data, 'little'))
 
-def _byteid(id: ID) -> bytes:
+def as_byteid(id: ID) -> bytes:
     return id if isinstance(id, bytes) else uuid_to_byteid(id)
-def _uuid(id: ID) -> UUID:
+def as_uuid(id: ID) -> UUID:
     return id if isinstance(id, UUID) else byteid_to_uuid(id)
 
 type Shape = typing.Any
@@ -66,7 +67,7 @@ class ShapeSets:
 
     def shape(self, id: ID) -> Shape:
         for shape in self.items:
-            if UUID(shape["uuid"]) == _uuid(id):
+            if UUID(shape["uuid"]) == as_uuid(id):
                 return shape
 
     def shape_from_name(self, name: str) -> Shape:

@@ -20,13 +20,16 @@ class StructMemberType:
 CHAR = StructMemberType("c",1,bytes)
 BYTE = StructMemberType("B",1,int)
 SHORT = StructMemberType("H",2,int)
+SIGNED_SHORT = StructMemberType("h",2,int)
 INT = StructMemberType("I",4,int)
+SIGNED_INT = StructMemberType("I",4,int)
 LONG = StructMemberType("L",4,int)
 LONGLONG = StructMemberType("Q",4,int)
 FLOAT = StructMemberType("f",4,float)
 DOUBLE = StructMemberType("d",4,float)
 def STRING(length: int):
     return StructMemberType(f"{length}s",length,str)
+BYTE_ID = StructMemberType("16s",16,str)
 
 
 class StructMember:

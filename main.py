@@ -3,6 +3,7 @@ import sys
 from sm import *
 import json
 import random
+import math
 
 def main():
     config = {}
@@ -16,19 +17,44 @@ def main():
     path = sys.argv[1] if len(sys.argv) >= 2 else input("Enter save path: ")
     db = sqlite3.connect(path)
 
-    encrypt_everything(db)
-    # stack(db,shapesets)
+    # encrypt_everything(db)
+    # inv_size(db, 60)
+    stack(db,shapesets,1)
     # read_all_containers(db,shapesets)
     # raise_deadbags(db, shapesets, DEADBAG_NEWEST)
+    replace_item(db, "8e61a423-5aa6-4dd3-ac57-ecac313f82f5",1,"5530e6a0-4748-4926-b134-50ca9ecb9dcf",0xffff)
 
-def stack(db: sqlite3.Connection, shapesets: ShapeSets):
+def replace_item(db: sqlite3.Connection, input: ID, input_count: int, output: ID, output_count: int):
+    for (rowid,data) in db.execute("SELECT rowid,data FROM Container").fetchall():
+        c = Container(data)
+        for item in c.items:
+            if item.id.get() == as_byteid(input) and (input_count <= 0 or item.count.get() == input_count):
+                item.id.set(as_byteid(output))
+                item.count.set(output_count)
+                print("replaced")
+        db.execute("UPDATE Container SET data=? WHERE rowid=?",[c.make(),rowid])
+    db.commit()
+
+def inv_size(db: sqlite3.Connection, size: int):
+    for (rowid,data) in db.execute("SELECT rowid,data FROM Container").fetchall():
+        c = Container(data)
+        if size > c.header.size.get():
+            c.header.size.set(size)
+            c.items.extend([Item(b"\x00" * 16 + b"\xff\xff\xff\xff" + b"\x00\x00")] * (size - len(c.items)))
+            db.execute("UPDATE Container SET data=? WHERE rowid=?",[c.make(),rowid])
+    db.commit()
+
+def stack(db: sqlite3.Connection, shapesets: ShapeSets, multiplier: int):
     q = db.execute("SELECT rowid,data FROM Container")
     for (rowid,data) in q.fetchall():
         container = Container(data)
         for item in container.items:
             shape = shapesets.shape(item.id.get())
-            if shape and "stackSize" in shape:
-                item.count.set(shape["stackSize"] * 3)
+            if shape:
+                item.count.set(max(item.count.get(), multiplier))
+                if "stackSize" in shape:
+                    item.count.set(min(max(10,item.count.get(),shape["stackSize"] * multiplier),0xffff))
+                # item.count.set(0xffff)
         db.execute("UPDATE Container SET data=? WHERE rowid=?",[container.make(),rowid])
     db.commit()
 
@@ -64,19 +90,20 @@ def raise_deadbags(db: sqlite3.Connection, shapesets: ShapeSets, method: int):
         if cs.shape == bag:
             (rowid, data) = db.execute("SELECT rowid, data FROM RigidBody WHERE id=?",[int(bodyId)]).fetchone()
             rb = RigidBody(data)
+            (oldx, oldy, oldz) = (rb.x, rb.y, rb.z)
             if method == DEADBAG_RAISE_50 or method == DEADBAG_RAISE_100:
                 rb.z += 50 if method == DEADBAG_RAISE_50 else 100
             elif method == DEADBAG_SHIP or method == DEADBAG_NEWEST:
                 rb.x = x
                 rb.y = y
                 rb.z = z
-                y+=2
+                z+=2
             else:
                 print("raise_deadbags: invalid method")
                 exit(2)
                 return
             
-            print(f"found bag rowid {rowid}\nold {data.hex()}\nnew {rb.make().hex()}")
+            print(f"found bag rowid {rowid}\nold {data.hex()}\nnew {rb.make().hex()}\nmoved {math.sqrt((oldx - rb.x) ** 2 + (oldy - rb.y) ** 2 + (oldz - rb.z) ** 2)}")
             db.execute("UPDATE RigidBody SET data=? WHERE rowid=?",[rb.make(),rowid])
     db.commit()
 
