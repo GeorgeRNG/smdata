@@ -167,7 +167,11 @@ class ChildShapeWedge(ChildShapeData):
 class Item(Struct):
     def __members__(self):
         self.id =      self.add(BYTE_ID)
-        self.divider = self.add(STRING(4))
+        self.tool =    self.add(INT)
+        """
+        If the id refers to a tool, then this points to a relevant entry in the Tool table.
+        If not, this is usually FF FF FF FF
+        """
         self.count =   self.add(SHORT)
 
 class ContainerHeader(Struct):
@@ -218,3 +222,16 @@ class Unit(Struct):
         self.rotation = self.add(FLOAT) #10
         self.d = self.add(FLOAT) #11 # might be a rotation value in radians
         self.e = self.add(STRING(9)) #12 # usually 9 null bytes
+
+class Tool(Struct):
+    """
+    This is referenced by a Container's Item's tool field.
+    It may be used for storing data on tools for scripts.
+    """
+    def __members__(self):
+        self.header = self.add(STRING(3)) # usually 08 00 01
+        self.id =     self.add(INT)
+        self.tool =   self.add(BYTE_ID)
+        self.owner =      self.add(INT)
+        # fdb8b8be-96e7-4de0-85c7-d2f42e4f33ce
+        # 080001 00000012 ce334f2ef4d2c785e04de796beb8b8fd 00000001
