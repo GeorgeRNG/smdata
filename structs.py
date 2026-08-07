@@ -7,15 +7,9 @@ import struct
 
 class StructMemberType:
     def __init__(self, char, size: int, type: type):
-        self.char = char
-        self.size = size
+        self.char: str = char
+        self.size: int = size
         self.type = type
-    def get_char(self) -> str:
-        return self.char
-    def get_size(self) -> int:
-        return self.size
-    def get_type(self) -> type:
-        return self.type
 
 CHAR = StructMemberType("c",1,bytes)
 BYTE = StructMemberType("B",1,int)
@@ -28,8 +22,8 @@ LONGLONG = StructMemberType("Q",4,int)
 FLOAT = StructMemberType("f",4,float)
 DOUBLE = StructMemberType("d",4,float)
 def STRING(length: int):
-    return StructMemberType(f"{length}s",length,str)
-BYTE_ID = StructMemberType("16s",16,str)
+    return StructMemberType(f"{length}s",length,bytes)
+BYTE_ID = StructMemberType("16s",16,bytes)
 
 
 class StructMember:
@@ -47,6 +41,14 @@ class Parsable:
         raise NotImplementedError()
     def make(self) -> bytes:
         raise NotImplementedError()
+
+    def __annotations__(self) -> tuple[str,str]:
+        top = ""
+        bottom = ""
+        return (top, bottom)
+
+    def annotate(self) -> str:
+        return "\n".join(self.__annotations__())
     
 class Struct(Parsable):
     def add(self, type: StructMemberType) -> StructMember:
@@ -76,3 +78,16 @@ class Struct(Parsable):
         for member in self.members:
             string += member.type.char
         return string
+
+    def __annotations__(self):
+        (top, bottom) = super().__annotations__()
+
+        for member in self.members:
+            if len(top) != 0:
+                top += " "
+            if len(bottom) != 0:
+                bottom += " "
+            top += member.type.char[-1] * member.type.size * 2
+            bottom += struct.pack(">" + member.type.char, member.value).hex()
+
+        return (top, bottom)
