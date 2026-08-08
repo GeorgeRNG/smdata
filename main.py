@@ -148,7 +148,80 @@ def read_all_containers(db: sqlite3.Connection, shapesets: ShapeSets):
             if shape is not None:
                 print(shape["name"])
             else:
-                print(item.id.value.hex())
+                print(item.id.value.hex(), item.tool.get())
+
+def move_bag_items_into_host_inventory(db: sqlite3.Connection, shapesets: ShapeSets, clues: list[str]):
+    rescues: dict[bytes,Item] = {}
+    no_stack_tools = 0
+    found_bag = False
+
+    for (rowid,data,) in db.execute("SELECT rowid,data FROM Container"):
+        container = Container(data)
+
+        found_clues = set()
+        for item in container.items:
+            shape = shapesets.shape(item.id.get())
+            if shape is not None:
+                if shape["name"] in clues:
+                    found_clues.add(shape["name"])
+        bag = set(clues) == found_clues
+        if bag or container.header.id.get() == 1:
+            print(f"CONTAINER {container.header.id.get()} SIZE {container.header.size.get()}")
+            for item in container.items:
+                if item.id.get() == b"\x00" * 16:
+                    continue
+                tool = item.tool.get() != 0xFFFFFFFF
+                if tool:
+                    no_stack_tools += 1
+                rescueid = item.id.get() + struct.pack("2I",item.tool.get(),(no_stack_tools if tool else 0))
+                if rescueid in rescues:
+                    addupitem = rescues[rescueid]
+                    addupitem.count.set(addupitem.count.get() + item.count.get())
+                else:
+                    rescues[rescueid] = Item(item.make())
+                shape = shapesets.shape(item.id.get())
+                if shape is not None and shape["name"]:
+                    print(shape["name"], item.count.get(), item.tool.get(), tool)
+                else:
+                    print(item.id.get(), item.tool.get(), tool)
+        if bag:
+            found_bag = True
+            container.items = []
+            container.header.size = 0
+            db.execute("UPDATE Container SET data=? WHERE rowid=?",[container.make(),rowid])
+            pass # Empty the bag
+
+    if not found_bag:
+        print("Did not find bag")
+        exit(2)
+        return
+    
+    (rowid,data) = db.execute("SELECT rowid,data FROM Container WHERE id=1").fetchone()
+    container = Container(data)
+    rescues = list(rescues.values())
+    if len(rescues) > container.header.size.get():
+        print("sorry, too many items to fit into your inventory")
+        exit(1)
+        return
+    print("NEW INVENTORY:")
+    for (i,item) in enumerate(container.items):
+        if i < len(rescues):
+            rescue = rescues[i]
+            item.id.set(rescue.id.get())
+            item.tool.set(rescue.tool.get())
+            item.count.set(rescue.count.get())
+            shape = shapesets.shape(item.id.value)
+            if shape is not None and shape["name"]:
+                print(shape["name"], item.count.get())
+            else:
+                print(item.id.get(), item.tool.get())
+        else:
+            item.id.set(b"\x00" * 16)
+            item.tool.set(0xFF_FF_FF_FF)
+            item.count.set(0)
+    db.execute("UPDATE Container SET data=? WHERE rowid=?",[container.make(),rowid])
+    db.commit()
+
 
 def read_userpos(db):
     q = db.execute("SELECT uid,key,data FROM GenericData where worldId = 65534 and flags = 3")
