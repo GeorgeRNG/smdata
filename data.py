@@ -235,3 +235,177 @@ class Tool(Struct):
         self.owner =      self.add(INT)
         # fdb8b8be-96e7-4de0-85c7-d2f42e4f33ce
         # 080001 00000012 ce334f2ef4d2c785e04de796beb8b8fd 00000001
+
+class Controller(Parsable):
+    def __init__(self, data: bytes):
+        self.header = ControllerHeader(data)
+        offset = self.header.calcsize()
+
+        types = {
+            ControllerElectricEngine.header: ControllerElectricEngine,
+            ControllerGasEngine.header: ControllerGasEngine,
+            ControllerLever.header: ControllerLever,
+            ControllerRadio.header: ControllerRadio,
+            ControllerLogicGate.header: ControllerLogicGate,
+            ControllerSuspension.legacy_header: ControllerSuspension,
+            ControllerSpotLight.header: ControllerSpotLight,
+            ControllerChest.header: ControllerChest,
+            ControllerPiston.legacy_header: ControllerPiston,
+            ControllerPiston.header: ControllerPiston,
+            ControllerSuspension.header: ControllerSuspension,
+        }
+
+        # FIXME: some Containers do not have these, I think. It might be possible to work out if these are needed
+        # based on the self.header.type() :pray:
+        # Could also put these inside the actual .data
+        # Could also make two ControllerData classes with and without this data
+        # Could also make these just be None if it's empty
+        # however, I feel like the first option is the best.
+        self.children_count = data[offset]
+        children_struct = f">{self.children_count}I"
+        offset += 1
+        end = offset + struct.calcsize(children_struct)
+        self.children = list(struct.unpack(children_struct,data[offset:end]))
+        """
+        A list of IDs of other Controllers that are children of this Controller
+        Children are output connections
+        """
+        offset = end
+        
+        self.bearings_count = data[offset]
+        bearings_struct = f">{self.bearings_count}I"
+        offset += 1
+        end = offset + struct.calcsize(bearings_struct)
+        self.bearings = list(struct.unpack(bearings_struct,data[offset:end]))
+        """
+        A list of IDs of bearings that are children of this Controller
+        """
+        offset = end
+
+        type = self.header.type()
+        print(type)
+        if type in types: self.data = types[type](data[offset:])
+        else: self.data = data[offset:]
+
+    def __annotations__(self):
+        (top, bottom) = self.header.__annotations__()
+        top += " BB"
+        bottom += f" {struct.pack("B", self.children_count).hex()}"
+        for (i,child) in enumerate(self.children):
+            top += f" {i}#IIIIIIII"
+            bottom += f" {i}#{struct.pack(">I",child).hex()}"
+        top += " BB"
+        bottom += f" {struct.pack("B", self.bearings_count).hex()}"
+        for (i,bearing) in enumerate(self.bearings):
+            top += f" {i}#IIIIIIII"
+            bottom += f" {i}#{struct.pack(">I",bearing).hex()}"
+        top += " "
+        bottom += " "
+        if isinstance(self.data, bytes):
+            top += len(self.data) * 2 * "s"
+            bottom += self.data.hex()
+        else:
+            (data_top, data_bottom) = self.data.__annotations__()
+            top += data_top
+            bottom += data_bottom
+
+        return (top,bottom)
+
+    def make(self):
+        assert self.children_count == len(self.children)
+        assert self.bearings_count == len(self.bearings)
+        controller = self.header.make()
+        controller += struct.pack(f">B{self.children_count}I",self.children_count,*self.children)
+        controller += struct.pack(f">B{self.bearings_count}I",self.bearings_count,*self.bearings)
+        controller += self.data if isinstance(self.data, bytes) else self.data.make()
+        return controller
+
+class ControllerHeader(Struct):
+    # he ty a  id       hostid   ht hostid   ht data
+    # 03 14 01 000002ba 00001359 01 00001359 01 00 0005
+    def __members__(self):
+        self.header = self.add(STRING(1)) # 03
+        self.type = self.add(BYTE)
+        self.a = self.add(STRING(1)) # 01
+        self.id = self.add(INT)
+        self.hostid = self.add(INT)
+        self.hosttype = self.add(BYTE) # 01
+        self.hostid2 = self.add(INT)
+        self.hosttype2 = self.add(BYTE)
+        """
+        Number of child connections child
+        Children are output connections
+        """
+
+    def __init__(self, data):
+        super().__init__(data)
+        if self.hostid() != self.hostid2():
+            print("hostid mismatch in Controller " + str(self.id()))
+        if self.hosttype() != self.hosttype2():
+            print("hosttype mismatch in Controller" + str(self.id))
+
+class ControllerByteState(Struct):
+    def __members__(self):
+            self.state = self.add(BYTE)
+class ControllerToggleable(ControllerByteState):
+    def is_on(self):
+        return (self.state & 0x80) != 0
+    def set_on(self, on):
+        if on:
+            self.state |= 0x80
+        else:
+            self.state &= ~0x80
+
+class ControllerElectricEngine(Struct):
+    header = 0x05
+    def __members__(self):
+        self.power = self.add(BYTE)
+class ControllerGasEngine(Struct):
+    header = 0x06
+    def __members__(self):
+        self.power = self.add(BYTE)
+class ControllerLever(ControllerToggleable):
+    header = 0x0b
+class ControllerRadio(ControllerToggleable):
+    header = 0x0e
+class ControllerLogicGate(ControllerToggleable):
+    header = 0x14
+    AND = 0
+    OR = 1
+    XOR = 2
+    NAND = 3
+    NOR = 4
+    XNOR = 5
+    def get_type(self):
+        return self.state & 0x07
+    def set_type(self, type):
+        self.state &= ~0x07
+        self.state |= type & 0x07
+class ControllerSpotLight(Struct):
+    header = 0x19
+    def __members__(self):
+        self.color = self.add(STRING(3))
+        """Appears to do nothing"""
+        self.alpha = self.add(BYTE)
+        """Appears to do nothing"""
+        self.brightness = self.add(BYTE)
+        """Brightness levels increase in multiples of 10, from 10 to 100"""
+class ControllerChest(Struct):
+    header = 0x1a
+    def __members__(self):
+        self.id = self.add(SHORT)
+        self.a = self.add(SHORT)
+class ControllerPiston(Struct):
+    legacy_header = 0x1d
+    header = 0x23
+
+    def __members__(self):
+        self.range = self.add(BYTE)
+        self.speed = self.add(BYTE)
+class ControllerSuspension(Struct):
+    legacy_header = 0x17
+    header = 0x24
+
+    def __members__(self):
+        self.strength = self.add(BYTE)
+        """Suspension goes from 0 to 12, however legacy suspension goes from 0 to 13"""
