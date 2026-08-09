@@ -31,6 +31,12 @@ class StructMember:
         self.type = type
         self.value = None # typescript when
 
+    def __call__(self, *args, **kwds):
+        if args == ():
+            return self.get()
+        else:
+            self.set(args[0])
+
     def get(self):
         return self.value
     def set(self, value):
