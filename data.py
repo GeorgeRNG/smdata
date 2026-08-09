@@ -409,3 +409,40 @@ class ControllerSuspension(Struct):
     def __members__(self):
         self.strength = self.add(BYTE)
         """Suspension goes from 0 to 12, however legacy suspension goes from 0 to 13"""
+
+class UniqueIds(Struct):
+    """
+    This has all IDs which count up and that are unique
+    Found in the Game table
+    """
+
+    def __members__(self):
+        self.a                = self.add(INT)
+        self.rigidbody        = self.add(INT)
+        self.joint            = self.add(INT)
+        self.childshape       = self.add(INT)
+        self.controller       = self.add(INT)
+        self.container        = self.add(INT)
+        self.harvestable      = self.add(INT)
+        self.b                = self.add(INT)
+        self.tool             = self.add(INT)
+        self.c                = self.add(INT)
+        self.unit             = self.add(INT)
+        self.d                = self.add(INT)
+        self.portal           = self.add(INT)
+        self.e                = self.add(INT)
+        self.voxelterrain     = self.add(INT)
+        self.scriptableobject = self.add(INT)
+        self.shapegroup       = self.add(INT)
+        self.f                = self.add(INT)
+        
+    #         rigidbod joint    childsha controll containe harvesta          tool              unit              portal            voxel    scriptab shapegro
+    #00000011 00000602 000002b1 00001ab4 00000583 00000019 00000100 00000100 00001707 00000200 00000400 00000100 00000112 34567800 00000300 0000fd90 00000540 00000001
+    #00000011 00000603 000002b1 00001ab5 00000583 00000019 00000100 00000100 00001707 00000200 00000400 00000100 00000112 34567800 00000300 0000fd90 00000540 00000001
+    #00000011 00000603 000002b1 00001ab7 00000585 0000001a 00000100 00000100 00001707 00000200 00000400 00000100 00000112 34567800 00000300 0000fd90 00000540 00000001
+    #00000011 00000604 000002b1 00001ab8 00000586 0000001a 00000100 00000100 00001708 00000200 00000401 00000100 00000112 34567800 00000300 0000fd90 00000540 00000001
+    #00000011 00000605 000002b2 00001ab9 00000586 0000001a 00000100 00000100 00001708 00000200 00000401 00000100 00000112 34567800 00000300 0000fd90 00000540 00000001
+    #00000011 00000605 000002b2 00001abc 00000589 0000001d 00000100 00000100 0000170a 00000200 00000401 00000100 00000112 34567800 00000304 0000fd90 00000540 00000001
+    #00000011 00000001 00000001 00000001 00000001 00000003 000004fa 00000002 0000000d 00000002 00000001 00000001 00000001 00000001 00000001 0000000d 00000001 40000000
+    #00000011 0000004f 00000002 0000026e 0000002c 00000007 0000118f 00000002 00000013 00000002 00000014 00000001 00000001 00000a20 00000001 0000002b 00000001 40000000
+    #00000011 000014cd 0000007d 00001d39 0000091d 000000a7 0000610f 00000004 0000002b 00000003 000008a5 00000001 00000005 0003cdca 00000001 000009f9 0000000b 40000027
