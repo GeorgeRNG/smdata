@@ -242,65 +242,38 @@ class Controller(Parsable):
         offset = self.header.calcsize()
 
         types = {
-            ControllerElectricEngine.header: ControllerElectricEngine,
-            ControllerGasEngine.header: ControllerGasEngine,
-            ControllerLever.header: ControllerLever,
-            ControllerRadio.header: ControllerRadio,
-            ControllerLogicGate.header: ControllerLogicGate,
-            ControllerSuspension.legacy_header: ControllerSuspension,
-            ControllerSpotLight.header: ControllerSpotLight,
-            ControllerChest.header: ControllerChest,
-            ControllerPiston.legacy_header: ControllerPiston,
-            ControllerPiston.header: ControllerPiston,
-            ControllerSuspension.header: ControllerSuspension,
+            ControllerElectricEngine.header: [ControllerElectricEngine,True],
+            ControllerGasEngine.header: [ControllerGasEngine,True],
+            ControllerLever.header: [ControllerLever,True],
+            ControllerThrusterLegacy.header: [ControllerThrusterLegacy,False],
+            ControllerRadio.header: [ControllerRadio,True],
+            ControllerTotebot.header: [ControllerTotebot,True],
+            ControllerLogicGate.header: [ControllerLogicGate,True],
+            ControllerSuspension.legacy_header: [ControllerSuspension,True],
+            ControllerSpotLight.header: [ControllerSpotLight,True],
+            ControllerChest.header: [ControllerChest,False],
+            ControllerThruster.header: [ControllerThruster,False],
+            ControllerPiston.legacy_header: [ControllerPiston,True],
+            ControllerPiston.header: [ControllerPiston,True],
+            ControllerSuspension.header: [ControllerSuspension,True],
         }
-
-        # FIXME: some Containers do not have these, I think. It might be possible to work out if these are needed
-        # based on the self.header.type() :pray:
-        # Could also put these inside the actual .data
-        # Could also make two ControllerData classes with and without this data
-        # Could also make these just be None if it's empty
-        # however, I feel like the first option is the best.
-        self.children_count = data[offset]
-        children_struct = f">{self.children_count}I"
-        offset += 1
-        end = offset + struct.calcsize(children_struct)
-        self.children = list(struct.unpack(children_struct,data[offset:end]))
-        """
-        A list of IDs of other Controllers that are children of this Controller
-        Children are output connections
-        """
-        offset = end
-        
-        self.bearings_count = data[offset]
-        bearings_struct = f">{self.bearings_count}I"
-        offset += 1
-        end = offset + struct.calcsize(bearings_struct)
-        self.bearings = list(struct.unpack(bearings_struct,data[offset:end]))
-        """
-        A list of IDs of bearings that are children of this Controller
-        """
-        offset = end
-
         type = self.header.type()
-        print(type)
-        if type in types: self.data = types[type](data[offset:])
+        type_info = types[type] if type in types else None
+
+        if type_info is None or type_info[1]: self.connections = ControllerConnectionsPresent(data[offset:])
+        else: self.connections = ControllerConnectionsAbsent(data[offset:])
+        offset += self.connections.__get_size__()
+
+        if type_info is not None: self.data = type_info[0](data[offset:])
         else: self.data = data[offset:]
 
     def __annotations__(self):
         (top, bottom) = self.header.__annotations__()
-        top += " BB"
-        bottom += f" {struct.pack("B", self.children_count).hex()}"
-        for (i,child) in enumerate(self.children):
-            top += f" {i}#IIIIIIII"
-            bottom += f" {i}#{struct.pack(">I",child).hex()}"
-        top += " BB"
-        bottom += f" {struct.pack("B", self.bearings_count).hex()}"
-        for (i,bearing) in enumerate(self.bearings):
-            top += f" {i}#IIIIIIII"
-            bottom += f" {i}#{struct.pack(">I",bearing).hex()}"
+        (ctop, cbottom) = self.connections.__annotations__()
         top += " "
         bottom += " "
+        top += ctop
+        bottom += cbottom
         if isinstance(self.data, bytes):
             top += len(self.data) * 2 * "s"
             bottom += self.data.hex()
@@ -315,8 +288,7 @@ class Controller(Parsable):
         assert self.children_count == len(self.children)
         assert self.bearings_count == len(self.bearings)
         controller = self.header.make()
-        controller += struct.pack(f">B{self.children_count}I",self.children_count,*self.children)
-        controller += struct.pack(f">B{self.bearings_count}I",self.bearings_count,*self.bearings)
+        controller += self.connections.make()
         controller += self.data if isinstance(self.data, bytes) else self.data.make()
         return controller
 
@@ -344,6 +316,58 @@ class ControllerHeader(Struct):
         if self.hosttype() != self.hosttype2():
             print("hosttype mismatch in Controller" + str(self.id))
 
+class ControllerConnections(Parsable):
+    pass
+class ControllerConnectionsAbsent(Parsable):
+    def __init__(self, data): pass
+    def make(self): return b""
+    def __annotations__(self): return ("","")
+    def __get_size__(self): return 0
+class ControllerConnectionsPresent(Parsable):
+    def __init__(self, data: bytes):
+        offset = 0
+        self.children_count = data[offset]
+        children_struct = f">{self.children_count}I"
+        offset += 1
+        end = offset + struct.calcsize(children_struct)
+        self.children = list(struct.unpack(children_struct,data[offset:end]))
+        """
+        A list of IDs of other Controllers that are children of this Controller
+        Children are output connections
+        """
+        offset = end
+        
+        self.bearings_count = data[offset]
+        bearings_struct = f">{self.bearings_count}I"
+        offset += 1
+        end = offset + struct.calcsize(bearings_struct)
+        self.bearings = list(struct.unpack(bearings_struct,data[offset:end]))
+        """
+        A list of IDs of bearings that are children of this Controller
+        """
+        self.__size__ = end
+    def make(self):
+        return (
+            struct.pack(f">B{self.children_count}I",self.children_count,*self.children) +
+            struct.pack(f">B{self.bearings_count}I",self.bearings_count,*self.bearings)
+        )
+    def __annotations__(self):
+        top = "BB"
+        bottom = f"{struct.pack("B", self.children_count).hex()}"
+        for (i,child) in enumerate(self.children):
+            top += f" {i}#IIIIIIII"
+            bottom += f" {i}#{struct.pack(">I",child).hex()}"
+        top += " BB"
+        bottom += f" {struct.pack("B", self.bearings_count).hex()}"
+        for (i,bearing) in enumerate(self.bearings):
+            top += f" {i}#IIIIIIII"
+            bottom += f" {i}#{struct.pack(">I",bearing).hex()}"
+        top += " "
+        bottom += " "
+        return (top,bottom)
+    def __get_size__(self):
+        return self.__size__
+
 class ControllerByteState(Struct):
     def __members__(self):
             self.state = self.add(BYTE)
@@ -366,8 +390,22 @@ class ControllerGasEngine(Struct):
         self.power = self.add(BYTE)
 class ControllerLever(ControllerToggleable):
     header = 0x0b
+class ControllerThrusterLegacy(Struct):
+    header = 0x0d
+    def __members__(self):
+        self.a = self.add(STRING(10))
+        self.power = self.add(BYTE)
 class ControllerRadio(ControllerToggleable):
     header = 0x0e
+class ControllerTotebot(Struct):
+    header = 0x10
+    STYLE_RETRO = 0
+    STYLE_DANCE = 1
+    def __members__(self):
+        self.style = self.add(BYTE)
+        self.pitch = self.add(FLOAT)
+        """From 0.0 to 1.0"""
+        self.volume = self.add(BYTE)
 class ControllerLogicGate(ControllerToggleable):
     header = 0x14
     AND = 0
@@ -393,8 +431,16 @@ class ControllerSpotLight(Struct):
 class ControllerChest(Struct):
     header = 0x1a
     def __members__(self):
-        self.id = self.add(SHORT)
+        self.id = self.add(INT)
         self.a = self.add(SHORT)
+class ControllerThruster(Struct):
+    header = 0x22
+    def __members__(self):
+        self.a = self.add(STRING(8))
+        self.container = self.add(INT)
+        self.b = self.add(STRING(2))
+        self.power = self.add(BYTE)
+        self.c = self.add(STRING(4))
 class ControllerPiston(Struct):
     legacy_header = 0x1d
     header = 0x23
@@ -426,7 +472,7 @@ class UniqueIds(Struct):
         self.harvestable      = self.add(INT)
         self.b                = self.add(INT)
         self.tool             = self.add(INT)
-        self.c                = self.add(INT)
+        self.player           = self.add(INT)
         self.unit             = self.add(INT)
         self.d                = self.add(INT)
         self.portal           = self.add(INT)
@@ -436,7 +482,7 @@ class UniqueIds(Struct):
         self.shapegroup       = self.add(INT)
         self.f                = self.add(INT)
         
-    #         rigidbod joint    childsha controll containe harvesta          tool              unit              portal            voxel    scriptab shapegro
+    #         rigidbod joint    childsha controll containe harvesta          tool     playerid unit              portal            voxel    scriptab shapegro
     #00000011 00000602 000002b1 00001ab4 00000583 00000019 00000100 00000100 00001707 00000200 00000400 00000100 00000112 34567800 00000300 0000fd90 00000540 00000001
     #00000011 00000603 000002b1 00001ab5 00000583 00000019 00000100 00000100 00001707 00000200 00000400 00000100 00000112 34567800 00000300 0000fd90 00000540 00000001
     #00000011 00000603 000002b1 00001ab7 00000585 0000001a 00000100 00000100 00001707 00000200 00000400 00000100 00000112 34567800 00000300 0000fd90 00000540 00000001
@@ -446,3 +492,5 @@ class UniqueIds(Struct):
     #00000011 00000001 00000001 00000001 00000001 00000003 000004fa 00000002 0000000d 00000002 00000001 00000001 00000001 00000001 00000001 0000000d 00000001 40000000
     #00000011 0000004f 00000002 0000026e 0000002c 00000007 0000118f 00000002 00000013 00000002 00000014 00000001 00000001 00000a20 00000001 0000002b 00000001 40000000
     #00000011 000014cd 0000007d 00001d39 0000091d 000000a7 0000610f 00000004 0000002b 00000003 000008a5 00000001 00000005 0003cdca 00000001 000009f9 0000000b 40000027
+    #00000011 000000ca 00000036 00000278 00000088 0000003c 000004fa 00000002 00000012 00000002 00000001 00000001 00000001 00000001 00000001 0000003d 00000002 40000000
+    #00000011 000000ca 00000036 00000278 00000088 0000003e 000004fa 00000002 0000001e 00000003 00000001 00000001 00000001 00000001 00000001 0000003d 00000002 40000000
