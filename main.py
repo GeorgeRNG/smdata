@@ -75,6 +75,7 @@ def encrypt_everything(db: sqlite3.Connection):
             db.execute("UPDATE RigidBody SET data=? WHERE rowid=?",[rb.make(),rowid])
     db.commit()
 
+DEADBAG_RAISE_10 = 0
 DEADBAG_RAISE_50 = 1
 DEADBAG_RAISE_100 = 2
 DEADBAG_SHIP = 2
@@ -99,8 +100,8 @@ def raise_deadbags(db: sqlite3.Connection, shapesets: ShapeSets, method: int):
             (rowid, data) = db.execute("SELECT rowid, data FROM RigidBody WHERE id=?",[int(bodyId)]).fetchone()
             rb = RigidBody(data)
             (oldx, oldy, oldz) = (rb.x, rb.y, rb.z)
-            if method == DEADBAG_RAISE_50 or method == DEADBAG_RAISE_100:
-                rb.z += 50 if method == DEADBAG_RAISE_50 else 100
+            if method in (DEADBAG_RAISE_10, DEADBAG_RAISE_50, DEADBAG_RAISE_100):
+                rb.z += [10,50,100][method]
             elif method == DEADBAG_SHIP or method == DEADBAG_NEWEST:
                 rb.x = x
                 rb.y = y
