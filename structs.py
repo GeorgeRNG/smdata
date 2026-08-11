@@ -27,9 +27,10 @@ BYTE_ID = StructMemberType("16s",16,bytes)
 
 
 class StructMember:
-    def __init__(self, type: StructMemberType):
+    def __init__(self, type: StructMemberType, name = ""):
         self.type = type
         self.value = None # typescript when
+        self.name = name
 
     def __call__(self, *args, **kwds):
         if args == ():
@@ -42,23 +43,71 @@ class StructMember:
     def set(self, value):
         self.value = value
 
+class Annotations:
+    def __init__(self):
+        self.names = ""
+        self.types = ""
+        self.value = ""
+    def add(self, *others: StructMember|Parsable|Annotations|tuple[str,str,str]|list[str]|str, splitter = " "):
+        first = True
+        for other in others:
+            if first:
+                first = False
+            else:
+                self.add(splitter)
+            if isinstance(other, Parsable):
+                other = other.annotate()
+            if isinstance(other, StructMember):
+                target_length = other.type.size * 2
+                names = other.name
+                types = other.type.char[-1] * (other.type.size * 2)
+                value = struct.pack(">" + other.type.char, other.value).hex()
+                assert len(types) == target_length and len(value) == target_length
+                self.cell(names, types, value)
+            elif isinstance(other, tuple) or isinstance(other, list):
+                self.cell(other[0], other[1], other[2])
+            elif isinstance(other, str):
+                self.cell(other,other,other)
+            elif isinstance(other, Annotations):
+                self.cell(other.names, other.types, other.value)
+            else: raise TypeError()
+
+    def cell(self, name: str, type: str, value: str):
+        assert isinstance(name, str) and isinstance(type, str) and isinstance(value, str) 
+        length = len(value)
+        assert len(type) == length
+        self.names += name.ljust(length)[:length]
+        self.types += type
+        self.value += value
+
+    def split(self, splitter = " "):
+        if not self.empty():
+            self.add(splitter)
+
+    def empty(self):
+        return len(self) == 0
+
+    def __len__(self):
+        return len(self.value)
+
+    def __str__(self):
+        return "\n".join([self.names, self.types, self.value])
+
+    def __repr__(self):
+        return self.__str__()
+
 class Parsable:
     def __init__(self, data: bytes):
         raise NotImplementedError()
     def make(self) -> bytes:
         raise NotImplementedError()
 
-    def __annotations__(self) -> tuple[str,str]:
-        top = ""
-        bottom = ""
-        return (top, bottom)
-
-    def annotate(self) -> str:
-        return "\n".join(self.__annotations__())
+    def annotate(self) -> Annotations:
+        return Annotations()
     
 class Struct(Parsable):
-    def add(self, type: StructMemberType) -> StructMember:
-        member = StructMember(type)
+    def add(self, type: StructMemberType, name: str = "") -> StructMember:
+        member = StructMember(type, name)
         self.members.append(member)
         return member
 
@@ -85,15 +134,11 @@ class Struct(Parsable):
             string += member.type.char
         return string
 
-    def __annotations__(self):
-        (top, bottom) = super().__annotations__()
+    def annotate(self) -> Annotations:
+        annotations = super().annotate()
 
         for member in self.members:
-            if len(top) != 0:
-                top += " "
-            if len(bottom) != 0:
-                bottom += " "
-            top += member.type.char[-1] * member.type.size * 2
-            bottom += struct.pack(">" + member.type.char, member.value).hex()
+            annotations.split(" ")
+            annotations.add(member)
 
-        return (top, bottom)
+        return annotations
