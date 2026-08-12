@@ -5,6 +5,33 @@ Classes for easily handling binary data
 
 import struct
 
+class ByteByByte:
+    def __init__(self, data: bytes):
+        self.data = data
+        self.offset = 0
+
+    def get(self, amount: int):
+        data = self.data[self.offset:self.offset+amount]
+        self.offset += amount
+        return data
+
+    def get_all(self):
+        return self.get(len(self)-self.offset)
+
+    def read(self, type: StructMemberType):
+        return struct.unpack(type.char, self.get(type.size))[0]
+
+    def reader(value: ReadableSource):
+        return ByteByByte(value) if isinstance(value, bytes) else value
+
+    def __bytes__(self):
+        return self.data
+
+    def __len__(self):
+        return len(self.data)
+
+ReadableSource = bytes|ByteByByte
+
 class StructMemberType:
     def __init__(self, char, size: int, type: type):
         self.char: str = char
@@ -18,7 +45,7 @@ SIGNED_SHORT = StructMemberType("h",2,int)
 INT = StructMemberType("I",4,int)
 SIGNED_INT = StructMemberType("I",4,int)
 LONG = StructMemberType("L",4,int)
-LONGLONG = StructMemberType("Q",4,int)
+LONGLONG = StructMemberType("Q",8,int)
 FLOAT = StructMemberType("f",4,float)
 DOUBLE = StructMemberType("d",4,float)
 def STRING(length: int):
@@ -48,7 +75,7 @@ class Annotations:
         self.names = ""
         self.types = ""
         self.value = ""
-    def add(self, *others: StructMember|Parsable|Annotations|tuple[str,str,str]|list[str]|str, splitter = " "):
+    def add(self, *others: StructMember|Parsable|Annotations|str, splitter = " "):
         first = True
         for other in others:
             if first:
@@ -64,8 +91,6 @@ class Annotations:
                 value = struct.pack(">" + other.type.char, other.value).hex()
                 assert len(types) == target_length and len(value) == target_length
                 self.cell(names, types, value)
-            elif isinstance(other, tuple) or isinstance(other, list):
-                self.cell(other[0], other[1], other[2])
             elif isinstance(other, str):
                 self.cell(other,other,other)
             elif isinstance(other, Annotations):
@@ -97,7 +122,9 @@ class Annotations:
         return self.__str__()
 
 class Parsable:
-    def __init__(self, data: bytes):
+    def __init__(self, data: ReadableSource):
+        self.__parse__(ByteByByte.reader(data))
+    def __parse__(self, data: ByteByByte) -> None:
         raise NotImplementedError()
     def make(self) -> bytes:
         raise NotImplementedError()
@@ -114,12 +141,15 @@ class Struct(Parsable):
     def __members__(self):
         pass
 
-    def __init__(self, data: bytes):
+    def __init__(self, data: ReadableSource):
         self.members: list[StructMember] = []
         self.__members__()
+        super().__init__(data)
+
+    def __parse__(self, data: ByteByByte):
         fmt = self.get_fmt()
         length = struct.calcsize(fmt)
-        for (i,v) in enumerate(struct.unpack(fmt, data[:length])):
+        for (i,v) in enumerate(struct.unpack(fmt, data.get(length))):
             self.members[i].value = v
 
     def calcsize(self) -> int:

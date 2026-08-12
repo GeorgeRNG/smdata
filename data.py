@@ -237,9 +237,8 @@ class Tool(Struct):
         # 080001 00000012 ce334f2ef4d2c785e04de796beb8b8fd 00000001
 
 class Controller(Parsable):
-    def __init__(self, data: bytes):
+    def __parse__(self, data: ByteByByte):
         self.header = ControllerHeader(data)
-        offset = self.header.calcsize()
 
         types: dict[int,tuple[(type[Parsable]),bool]] = {
             ControllerElectricEngine.header: (ControllerElectricEngine,True),
@@ -264,16 +263,22 @@ class Controller(Parsable):
         type: int = self.header.type()
         type_info = types[type] if type in types else None
 
-        if type_info is None or type_info[1]: self.connections = ControllerConnectionsPresent(data[offset:])
-        else: self.connections = ControllerConnectionsAbsent(data[offset:])
-        offset += self.connections.__get_size__()
+        if type_info is None:
+            offset = data.offset
+            try: self.connections = ControllerConnectionsPresent(data)
+            except: 
+                data.offset = offset
+                self.connections = ControllerConnectionsAbsent(data)
+        else:
+            if type_info[1]: self.connections = ControllerConnectionsPresent(data)
+            else: self.connections = ControllerConnectionsAbsent(data)
 
-        if type_info is not None: self.data = type_info[0](data[offset:])
-        else: self.data = data[offset:]
+        if type_info is not None: self.data = type_info[0](data)
+        else: self.data = data.get_all()
 
     def annotate(self) -> Annotations:
         annotations = super().annotate()
-        annotations.add(self.header, self.connections)
+        annotations.add("HEADER [",self.header, "] ", self.connections,splitter="")
         annotations.split()
         if (isinstance(self.data, bytes)):
             annotations.cell("data (unknown)","s" * len(self.data) * 2,self.data.hex())
@@ -314,32 +319,25 @@ class ControllerHeader(Struct):
 class ControllerConnections(Parsable):
     pass
 class ControllerConnectionsAbsent(Parsable):
-    def __init__(self, data): pass
     def make(self): return b""
-    def __get_size__(self): return 0
+    def __parse__(self, data):
+        pass
 class ControllerConnectionsPresent(Parsable):
-    def __init__(self, data: bytes):
-        offset = 0
-        self.children_count = data[offset]
+    def __parse__(self, data: ByteByByte):
+        self.children_count: int = data.read(BYTE)
         children_struct = f">{self.children_count}I"
-        offset += 1
-        end = offset + struct.calcsize(children_struct)
-        self.children = list(struct.unpack(children_struct,data[offset:end]))
+        self.children = list(struct.unpack(children_struct,data.get(struct.calcsize(children_struct))))
         """
         A list of IDs of other Controllers that are children of this Controller
         Children are output connections
         """
-        offset = end
         
-        self.bearings_count = data[offset]
+        self.bearings_count = data.read(BYTE)
         bearings_struct = f">{self.bearings_count}I"
-        offset += 1
-        end = offset + struct.calcsize(bearings_struct)
-        self.bearings = list(struct.unpack(bearings_struct,data[offset:end]))
+        self.bearings = list(struct.unpack(bearings_struct,data.get(struct.calcsize(bearings_struct))))
         """
         A list of IDs of bearings that are children of this Controller
         """
-        self.__size__ = end
     def make(self):
         assert self.children_count == len(self.children)
         assert self.bearings_count == len(self.bearings)
@@ -359,8 +357,6 @@ class ControllerConnectionsPresent(Parsable):
             annotations.split()
             annotations.cell(f"bearing {i}","IIIIIIII",struct.pack(">I",bearing).hex())
         return annotations
-    def __get_size__(self):
-        return self.__size__
 
 class ControllerByteState(Struct):
     def __members__(self):
