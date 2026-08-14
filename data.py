@@ -1,6 +1,13 @@
 from struct import pack, unpack, calcsize
 from structs import *
 
+def get_byte(input, byte: int):
+        return (input & byte) != 0
+def set_byte(input, byte: int, value: bool):
+    if value: input |= byte
+    else: input &= ~byte
+    return input
+
 class RigidBody:
     struct = ">2s B I H 16s H 4f 3f"
 
@@ -85,84 +92,77 @@ class RigidBodyMobile(RigidBodyData):
     def make(self):
         return pack(self.struct, self.data, self.restrictions)
 
-"""
-Every part, wedge, and stretch of blocks is its own ChildShape
-Blocks will automatically simplify themself (merge with other blocks to keep the minimum amount of blocks)
-"""
-class ChildShape:
-    struct = ">3s I I 16s I 3h B 3s"
+class ChildShapeHeader(Struct):
+    """
+    Every part, wedge, and stretch of blocks is its own ChildShape
+    Blocks will automatically simplify themself (merge with other blocks to keep the minimum amount of blocks)
+    """
+    def __members__(self):
+        self.header = self.add(STRING(3),"header")
+        self.id = self.add(INT,"id")
+        self.body = self.add(INT,"body")
+        self.shape = self.add(BYTE_ID,"shape id")
+        self.id_again = self.add(INT,"id_2") # sure why not
+        self.x = self.add(SIGNED_SHORT,"x")
+        self.y = self.add(SIGNED_SHORT,"y")
+        self.z = self.add(SIGNED_SHORT,"z")
+        self._a = self.add(BYTE)
+        self.color = self.add(STRING(3),"rrggbb")
+class ChildShape(Parsable):
+    """
+    Every part, wedge, and stretch of blocks is its own ChildShape
+    Blocks will automatically simplify themself (merge with other blocks to keep the minimum amount of blocks)
+    """
+    FLAG_CABLEBOT_EATING = 2 ** 0
+    FLAG_BURNING = 2 ** 1
 
-    def __init__(self, data: bytes):
-        self.header: bytes
-        self.id: int
-        self.body: int
-        self.shape: bytes
-        self.id_again: int # yeah sure why not
-        self.x: int
-        self.y: int
-        self.z: int
-        self._a: int
-        self.color: any
-        self.data: ChildShapeData
-        self.flags: int
-        start = calcsize(self.struct)
-        end = start
-        (self.header,self.id,self.body,self.shape,self.id_again,self.x,self.y,self.z,self._a,self.color) = unpack(self.struct, data[ : start])
-        if self.header == ChildShapeBlock.header: 
-            end += calcsize(ChildShapeBlock.struct)
-            self.data = ChildShapeBlock(data[start : end])
-        elif self.header == ChildShapePart.header:
-            end += calcsize(ChildShapePart.struct)
-            self.data = ChildShapePart(data[start : end])
-        elif self.header == ChildShapeWedge.header:
-            end += calcsize(ChildShapeWedge.struct)
-            self.data = ChildShapeWedge(data[start : end])
-        else:
-            print(f"unknown header {self.header.hex()}")
-        # if (self.id != self.id_again): print(f"value after shape on childshape {self.id} does not match id ({self.id_again})")
+    def __parse__(self, data):
+        self.header = ChildShapeHeader(data)
+        type = self.header.header()
+        if type == ChildShapeBlock.header: self.data = ChildShapeBlock(data)
+        elif type == ChildShapePart.header: self.data = ChildShapePart(data)
+        elif type == ChildShapeWedge.header: self.data = ChildShapeWedge(data)
+        self.flags = data.read(BYTE)
 
-    def make(self) -> bytes:
-        return pack(self.struct, self.header, self.id, self.body, self.shape, self.id_again, self.x, self.y, self.z, self._a, self.color) + self.data.make()
+    def get_flag(self, flag) -> bool:
+        return get_byte(self.flags, flag)
+    def set_flag(self, flag, value: bool):
+        self.flags = set_byte(self.flags, flag, value)
 
-class ChildShapeData:
-        def __init__(self, data: bytes):
-            raise NotImplementedError()
-        def make(self) -> bytes:
-            raise NotImplementedError()
-class ChildShapeBlock:
+    def make(self):
+        return (
+            self.header.make() +
+            self.data.make() +
+            struct.pack(">B", self.flags)
+        )
+
+    def annotate(self) -> Annotations:
+        annotations = super().annotate()
+        print(self.data)
+        annotations.add(self.header, self.data)
+        annotations.split()
+        annotations.encode("flags", self.flags, BYTE)
+        return annotations
+
+class ChildShapeBlock(Struct):
     header = b"\x01\x1f\x01"
-    struct = ">3H B"
 
-    FLAG_CABLEBOT_EATING = 1
-    FLAG_BURNING = 2
-
-    def __init__(self, data: bytes):
-        self.length: int
-        self.width: int
-        self.height: int
-        self.flags: int
-        (self.length,self.width,self.height,self.flags) = unpack(self.struct, data)
-    def make(self) -> bytes:
-        return pack(self.struct, self.length, self.width, self.height, self.flags)
-class ChildShapePart(ChildShapeData):
+    def __members__(self):
+        self.x = self.add(SHORT,"x")
+        self.y = self.add(SHORT,"y")
+        self.z = self.add(SHORT,"z")
+class ChildShapePart(Struct):
     header = b"\x01\x20\x01"
-    struct = "H"
-    def __init__(self, data):
-        self.rotation: int
-        (self.rotation,) = unpack(self.struct, data)
-    def make(self):
-        return pack(self.struct, self.rotation)
-class ChildShapeWedge(ChildShapeData):
+
+    def __members__(self):
+        self.rotation = self.add(BYTE,"rotation")
+class ChildShapeWedge(Struct):
     header = b"\x01\x28\x01"
-    struct = "3HH"
-    def __init__(self, data: bytes):
-        self.length: int
-        self.width: int
-        self.height: int
-        self.rotation: int
-        (self.length,self.width,self.height,self.rotation) = unpack(self.struct, data)
-    def make(self):
-        return pack(self.struct,self.length,self.width,self.height,self.rotation)
+    def __members__(self):
+        self.x = self.add(SHORT,"x")
+        self.y = self.add(SHORT,"y")
+        self.z = self.add(SHORT,"z")
+        self.rotation = self.add(BYTE,"rotation")
 
 class Item(Struct):
     def __members__(self):
