@@ -5,6 +5,13 @@ Classes for easily handling binary data
 
 import struct
 
+def get_byte(input, byte: int):
+        return (input & byte) != 0
+def set_byte(input, byte: int, value: bool):
+    if value: input |= byte
+    else: input &= ~byte
+    return input
+
 class ByteByByte:
     def __init__(self, data: bytes):
         self.data = data
@@ -85,12 +92,8 @@ class Annotations:
             if isinstance(other, Parsable):
                 other = other.annotate()
             if isinstance(other, StructMember):
-                target_length = other.type.size * 2
-                names = other.name
-                types = other.type.char[-1] * (other.type.size * 2)
-                value = struct.pack(">" + other.type.char, other.value).hex()
-                assert len(types) == target_length and len(value) == target_length
-                self.cell(names, types, value)
+                self.encode(other.name, other.value, other.type)
+
             elif isinstance(other, str):
                 self.cell(other,other,other)
             elif isinstance(other, Annotations):
@@ -104,6 +107,14 @@ class Annotations:
         self.names += name.ljust(length)[:length]
         self.types += type
         self.value += value
+
+    def encode(self, names: str, value, type: StructMemberType):
+        target_length = type.size * 2
+        types = type.char[-1] * (type.size * 2)
+        value = struct.pack(">" + type.char, value).hex()
+        assert len(types) == target_length and len(value) == target_length
+        self.cell(names, types, value)
+
 
     def split(self, splitter = " "):
         if not self.empty():

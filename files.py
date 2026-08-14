@@ -22,14 +22,14 @@ class Paths:
                         .replace("$CHALLENGE_DATA",str(self.challenge))
                     )
 
-type ID = typing.Union[UUID, bytes]
-def uuid_to_byteid(uuid: UUID) -> bytes:
-    if isinstance(uuid, str): uuid = UUID(uuid)
-    return uuid.bytes[::-1]
+type ID = UUID | bytes
+def uuid_to_byteid(uuid: UUID | str) -> bytes:
+    return (uuid if isinstance(uuid, UUID) else UUID(uuid)).bytes[::-1]
 def byteid_to_uuid(data: bytes) -> UUID:
     return UUID(int=int.from_bytes(data, 'little'))
 
-def as_byteid(id: ID) -> bytes:
+type ID_LITERAL = ID | str
+def as_byteid(id: ID_LITERAL) -> bytes:
     return id if isinstance(id, bytes) else uuid_to_byteid(id)
 def as_uuid(id: ID) -> UUID:
     return id if isinstance(id, UUID) else byteid_to_uuid(id)
