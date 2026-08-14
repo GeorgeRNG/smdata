@@ -5,9 +5,9 @@ Classes for easily handling binary data
 
 import struct
 
-def get_byte(input, byte: int):
+def get_byte(input: int, byte: int):
         return (input & byte) != 0
-def set_byte(input, byte: int, value: bool):
+def set_byte(input: int, byte: int, value: bool):
     if value: input |= byte
     else: input &= ~byte
     return input
@@ -115,6 +115,8 @@ class Annotations:
         assert len(types) == target_length and len(value) == target_length
         self.cell(names, types, value)
 
+    def bytes(self, data: bytes, name = ""):
+        self.cell(name, "s" * (2 * len(data)), data.hex())
 
     def split(self, splitter = " "):
         if not self.empty():

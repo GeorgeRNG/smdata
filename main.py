@@ -69,10 +69,11 @@ def stack(db: sqlite3.Connection, shapesets: ShapeSets, multiplier: int):
 def encrypt_everything(db: sqlite3.Connection):
     for (rowid, data) in db.execute("SELECT rowid, data FROM RigidBody").fetchall():
         rb = RigidBody(data)
-        if True:
-            rb.data.restrictions = 0xff
+        rb.data.set_restriction(RigidBodyData.RESTRICT_BUILDABLE,True)
+        rb.data.set_restriction(RigidBodyData.RESTRICT_ERASABLE,True)
+        rb.data.set_restriction(RigidBodyData.RESTRICT_LIFTABLE,True)
 
-            db.execute("UPDATE RigidBody SET data=? WHERE rowid=?",[rb.make(),rowid])
+        db.execute("UPDATE RigidBody SET data=? WHERE rowid=?",[rb.make(),rowid])
     db.commit()
 
 DEADBAG_RAISE_10 = 0
@@ -90,40 +91,39 @@ def raise_deadbags(db: sqlite3.Connection, shapesets: ShapeSets, method: int):
     if method == DEADBAG_NEWEST:
         (data,) = db.execute("SELECT data FROM RigidBody ORDER BY id DESC LIMIT 1").fetchone()
         rb = RigidBody(data)
-        x = rb.x
-        y = rb.y
-        z = rb.z + 2
+        x = rb.header.x()
+        y = rb.header.y()
+        z = rb.header.z() + 2.0
     
     for (bodyId,data) in db.execute("SELECT bodyId, data FROM ChildShape").fetchall():
         cs = ChildShape(data)
-        if cs.shape == bag:
+        if cs.header.shape() == bag:
             (rowid, data) = db.execute("SELECT rowid, data FROM RigidBody WHERE id=?",[int(bodyId)]).fetchone()
             rb = RigidBody(data)
-            (oldx, oldy, oldz) = (rb.x, rb.y, rb.z)
+            (oldx, oldy, oldz) = (rb.header.x(), rb.header.y(), rb.header.z())
             if method in (DEADBAG_RAISE_10, DEADBAG_RAISE_50, DEADBAG_RAISE_100):
-                rb.z += [10,50,100][method]
+                rb.header.z(rb.header.z() + [10,50,100][method])
             elif method == DEADBAG_SHIP or method == DEADBAG_NEWEST:
-                rb.x = x
-                rb.y = y
-                rb.z = z
+                rb.header.x(x)
+                rb.header.y(y)
+                rb.header.z(z)
                 z+=2
             else:
                 print("raise_deadbags: invalid method")
                 exit(2)
                 return
             
-            print(f"found bag rowid {rowid}\nold {data.hex()}\nnew {rb.make().hex()}\nmoved {math.sqrt((oldx - rb.x) ** 2 + (oldy - rb.y) ** 2 + (oldz - rb.z) ** 2)}")
+            print(f"found bag rowid {rowid}\nold {data.hex()}\nnew {rb.make().hex()}\nmoved {math.sqrt((oldx - rb.header.x()) ** 2 + (oldy - rb.header.y()) ** 2 + (oldz - rb.header.z()) ** 2)}")
             db.execute("UPDATE RigidBody SET data=? WHERE rowid=?",[rb.make(),rowid])
     db.commit()
 
 def move_everything_up(db):
     bodies = db.execute("SELECT rowid, data from RigidBody").fetchall()
     
-    for (rowid, bytess) in bodies:
-        print(bytess.hex())
-        rb = RigidBody(bytess)
+    for (rowid, data) in bodies:
+        rb = RigidBody(data)
 
-        rb.z += 30
+        rb.header.z(rb.header.z() + 30)
 
         db.execute("UPDATE RigidBody SET data=? WHERE rowid=?",[rb.make(),rowid])
         db.commit()
