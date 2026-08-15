@@ -5,44 +5,7 @@ from datas.tool import *
 from datas.uniqueids import *
 from datas.unit import *
 from datas.rigidbody import *
-
-class Item(Struct):
-    def __members__(self):
-        self.id =      self.add(BYTE_ID)
-        self.tool =    self.add(INT)
-        """
-        If the id refers to a tool, then this points to a relevant entry in the Tool table.
-        If not, this is usually FF FF FF FF
-        """
-        self.count =   self.add(SHORT)
-
-class ContainerHeader(Struct):
-    def __members__(self):
-        self.header =  self.add(STRING(3))
-        self.id =      self.add(INT)
-        self.divider = self.add(STRING(1))
-        self.size =    self.add(BYTE)
-        self.a =       self.add(STRING(2))
-
-class Container(Parsable):
-    def __init__(self, data):
-        self.header = ContainerHeader(data)
-        offset = self.header.calcsize()
-        self.items: list[Item] = []
-        for _ in range(self.header.size.value):
-            item = Item(data[offset:])
-            self.items.append(item)
-            offset+=item.calcsize()
-        self.a = data[offset:]
-
-    def make(self):
-        container = self.header.make()
-        for item in self.items:
-            container += item.make()
-        container += self.a
-        return container
-
-
+from datas.container import *
 
 class Controller(Parsable):
     def __parse__(self, data: ByteByByte):

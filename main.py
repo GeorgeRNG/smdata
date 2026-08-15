@@ -20,6 +20,14 @@ def main():
     # raise_deadbags(db, shapesets, DEADBAG_RAISE_100)
     freeze_loose_parts(db, shapesets)
 
+def everything_can_only_contain_scrapwood(db: sqlite3.Connection, shapesets: ShapeSets) -> None:
+    for (data,rowid) in db.execute("SELECT data,rowid FROM Container"):
+        c = Container(data)
+        c.filter_count = 1
+        c.filters = [as_byteid(shapesets.shape_from_name("blk_scrapwood")["uuid"])[::-1]]
+        db.execute("UPDATE Container SET data=? WHERE rowid=?",[c.make(),rowid])
+    db.commit()
+
 
 def freeze_loose_parts(db: sqlite3.Connection, shapesets: ShapeSets):
     targets = [as_byteid(shapesets.shape_from_name(name)["uuid"]) for name in [
@@ -74,8 +82,8 @@ def replace_item(db: sqlite3.Connection, input: ID, input_count: int, output: ID
 def inv_size(db: sqlite3.Connection, size: int):
     for (rowid,data) in db.execute("SELECT rowid,data FROM Container").fetchall():
         c = Container(data)
-        if size > c.header.size.get():
-            c.header.size.set(size)
+        if size > c.header.slots.get():
+            c.header.slots.set(size)
             c.items.extend([Item(b"\x00" * 16 + b"\xff\xff\xff\xff" + b"\x00\x00")] * (size - len(c.items)))
             db.execute("UPDATE Container SET data=? WHERE rowid=?",[c.make(),rowid])
     db.commit()
@@ -195,7 +203,7 @@ def move_bag_items_into_host_inventory(db: sqlite3.Connection, shapesets: ShapeS
                     found_clues.add(shape["name"])
         bag = set(clues) == found_clues
         if bag or container.header.id.get() == 1:
-            print(f"CONTAINER {container.header.id.get()} SIZE {container.header.size.get()}")
+            print(f"CONTAINER {container.header.id.get()} SIZE {container.header.slots.get()}")
             for item in container.items:
                 if item.id.get() == b"\x00" * 16:
                     continue
@@ -216,7 +224,7 @@ def move_bag_items_into_host_inventory(db: sqlite3.Connection, shapesets: ShapeS
         if bag:
             found_bag = True
             container.items = []
-            container.header.size = 0
+            container.header.slots = 0
             db.execute("UPDATE Container SET data=? WHERE rowid=?",[container.make(),rowid])
             pass # Empty the bag
 
@@ -228,7 +236,7 @@ def move_bag_items_into_host_inventory(db: sqlite3.Connection, shapesets: ShapeS
     (rowid,data) = db.execute("SELECT rowid,data FROM Container WHERE id=1").fetchone()
     container = Container(data)
     rescues = list(rescues.values())
-    if len(rescues) > container.header.size.get():
+    if len(rescues) > container.header.slots.get():
         print("sorry, too many items to fit into your inventory")
         exit(1)
         return

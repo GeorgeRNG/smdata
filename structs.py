@@ -26,7 +26,7 @@ class ByteByByte:
         return self.get(len(self)-self.offset)
 
     def read(self, type: StructMemberType):
-        return struct.unpack(type.char, self.get(type.size))[0]
+        return struct.unpack(">" + type.char, self.get(type.size))[0]
 
     def reader(value: ReadableSource):
         return ByteByByte(value) if isinstance(value, bytes) else value
