@@ -8,7 +8,7 @@ class ChildShapeHeader(Struct):
     def __members__(self):
         self.header = self.add(STRING(3),"header")
         self.id = self.add(INT,"id")
-        self.body = self.add(INT,"body")
+        self.body_id = self.add(INT,"body")
         self.shape = self.add(BYTE_ID,"shape id")
         self.id_again = self.add(INT,"id_2") # sure why not
         self.x = self.add(SIGNED_SHORT,"x")

@@ -9,13 +9,13 @@ class RigidBodyHeader(Struct):
         self.id_b = self.add(BYTE_ID)
         self.b = self.add(SHORT)
         self.rotation_x = self.add(FLOAT,"x rotation")
-        """Quaternion"""
+        """Quaternion, the order of elements reverse between being static or mobile"""
         self.rotation_y = self.add(FLOAT,"y rotation")
-        """Quaternion"""
+        """Quaternion, the order of elements reverse between being static or mobile"""
         self.rotation_z = self.add(FLOAT,"z rotation")
-        """Quaternion"""
+        """Quaternion, the order of elements reverse between being static or mobile"""
         self.rotation_w = self.add(FLOAT,"w rotation")
-        """Quaternion"""
+        """Quaternion, the order of elements reverse between being static or mobile"""
         self.x = self.add(FLOAT,"x")
         """East"""
         self.y = self.add(FLOAT,"y")

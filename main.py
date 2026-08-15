@@ -17,12 +17,40 @@ def main():
     path = sys.argv[1] if len(sys.argv) >= 2 else input("Enter save path: ")
     db = sqlite3.connect(path)
 
-    # encrypt_everything(db)
-    # inv_size(db, 60)
-    # stack(db,shapesets,1)
-    # read_all_containers(db,shapesets)
-    # raise_deadbags(db, shapesets, DEADBAG_NEWEST)
-    # replace_item(db, "8e61a423-5aa6-4dd3-ac57-ecac313f82f5",1,"5530e6a0-4748-4926-b134-50ca9ecb9dcf",0xffff)
+    # raise_deadbags(db, shapesets, DEADBAG_RAISE_100)
+    freeze_loose_parts(db, shapesets)
+
+
+def freeze_loose_parts(db: sqlite3.Connection, shapesets: ShapeSets):
+    targets = [as_byteid(shapesets.shape_from_name(name)["uuid"]) for name in [
+        "obj_interactive_robotbasshead","obj_interactive_robotdrumhead","obj_interactive_robotdrumhead","obj_interactive_robotbliphead01",
+        "obj_harvest_stone","obj_harvest_wood","obj_harvest_wood2","obj_harvest_metal","obj_harvest_metal2",
+    ]]
+
+    results = []
+    for (data,) in db.execute("SELECT data FROM ChildShape GROUP BY bodyId HAVING COUNT(*) = 1"):
+        cs = ChildShape(data)
+        if cs.header.shape() in targets:
+            results.append(cs.header.body_id())
+
+    locked = 0
+    for (rowid, data) in db.execute("SELECT rowid, data FROM RigidBody"):
+        rb = RigidBody(data)
+        if rb.header.id() not in results:
+            continue
+        if rb.header.header() == RigidBodyMobile.header:
+            rb.header.header(RigidBodyStatic.header)
+            rb.data = RigidBodyStatic(b"\x00\xFF\xFF\xFF\xFF")
+            (x,y,z,w) = [rb.header.rotation_x(),rb.header.rotation_y(),rb.header.rotation_z(),rb.header.rotation_w()]
+            rb.header.rotation_x(w)
+            rb.header.rotation_y(z)
+            rb.header.rotation_z(y)
+            rb.header.rotation_w(x)
+            locked += 1
+
+        db.execute("UPDATE RigidBody SET data=? WHERE rowid=?",[rb.make(),rowid])
+    db.commit()
+    print(f"locked {locked} bodies.")
 
 def print_unit_pos(db:sqlite3.Connection):
     for (rowid,data) in db.execute("SELECT rowid,data FROM unit"):
