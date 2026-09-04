@@ -4,6 +4,8 @@ from sm import *
 import json
 import random
 import math
+import base64
+import subprocess
 
 def main():
     config = {}
@@ -17,8 +19,22 @@ def main():
     path = sys.argv[1] if len(sys.argv) >= 2 else input("Enter save path: ")
     db = sqlite3.connect(path)
 
+    for (data,) in db.execute("""SELECT data FROM ScriptData WHERE worldId = 65534 and key = unhex("4c5541000000010831")"""):
+    # for (data,) in db.execute("""SELECT data FROM ScriptData WHERE key = unhex("0d000000")"""):
+    # for (data,) in db.execute("SELECT data FROM ScriptData"):
+        sd = ScriptData(data)
+        # print(sd.annotate())
+        # print(base64.b64encode(sd.data))
+        print(sd.uid.hex(),sd.key.hex())
+        try:
+            print(subprocess.check_output(['lua','main.lua',base64.b64encode(sd.data)],cwd="lua").decode())
+        except:
+            pass
+
+    # just_stack(db,0xFFFF)
     # raise_deadbags(db, shapesets, DEADBAG_RAISE_100)
-    freeze_loose_parts(db, shapesets)
+    # freeze_loose_parts(db, shapesets)
+    # freeze_everything(db)
 
 def everything_can_only_contain_scrapwood(db: sqlite3.Connection, shapesets: ShapeSets) -> None:
     for (data,rowid) in db.execute("SELECT data,rowid FROM Container"):
@@ -28,6 +44,23 @@ def everything_can_only_contain_scrapwood(db: sqlite3.Connection, shapesets: Sha
         db.execute("UPDATE Container SET data=? WHERE rowid=?",[c.make(),rowid])
     db.commit()
 
+def freeze_everything(db: sqlite3.Connection):
+    locked = 0
+    for (rowid, data) in db.execute("SELECT rowid, data FROM RigidBody"):
+        rb = RigidBody(data)
+        if rb.header.header() == RigidBodyMobile.header:
+            rb.header.header(RigidBodyStatic.header)
+            rb.data = RigidBodyStatic(b"\x00\xFF\xFF\xFF\xFF")
+            (x,y,z,w) = [rb.header.rotation_x(),rb.header.rotation_y(),rb.header.rotation_z(),rb.header.rotation_w()]
+            rb.header.rotation_x(w)
+            rb.header.rotation_y(z)
+            rb.header.rotation_z(y)
+            rb.header.rotation_w(x)
+            locked += 1
+
+        db.execute("UPDATE RigidBody SET data=? WHERE rowid=?",[rb.make(),rowid])
+    db.commit()
+    print(f"locked {locked} bodies.")
 
 def freeze_loose_parts(db: sqlite3.Connection, shapesets: ShapeSets):
     targets = [as_byteid(shapesets.shape_from_name(name)["uuid"]) for name in [
@@ -86,6 +119,15 @@ def inv_size(db: sqlite3.Connection, size: int):
             c.header.slots.set(size)
             c.items.extend([Item(b"\x00" * 16 + b"\xff\xff\xff\xff" + b"\x00\x00")] * (size - len(c.items)))
             db.execute("UPDATE Container SET data=? WHERE rowid=?",[c.make(),rowid])
+    db.commit()
+
+def just_stack(db: sqlite3.Connection, count: int):
+    q = db.execute("SELECT rowid,data FROM Container")
+    for (rowid,data) in q.fetchall():
+        container = Container(data)
+        for item in container.items:
+            item.count.set(count)
+        db.execute("UPDATE Container SET data=? WHERE rowid=?",[container.make(),rowid])
     db.commit()
 
 def stack(db: sqlite3.Connection, shapesets: ShapeSets, multiplier: int):

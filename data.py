@@ -6,6 +6,7 @@ from datas.uniqueids import *
 from datas.unit import *
 from datas.rigidbody import *
 from datas.container import *
+from datas.scriptdata import *
 
 class Controller(Parsable):
     def __parse__(self, data: ByteByByte):

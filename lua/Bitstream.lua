@@ -1,0 +1,156 @@
+BitStream = {}
+
+function BitStream.new(data)
+    local self = unpack({BitStream})
+    self.data = {}
+
+    if data then
+        for char in data:gmatch(".") do
+            table.insert(self.data, string.byte(char))
+        end
+    end
+
+    self.bitPos = 0
+
+    return self
+end
+
+function BitStream:writeBits(value, numBits)
+    for i = numBits - 1, 0, -1 do
+        local byteIndex = math.floor(self.bitPos / 8) + 1
+        local bitOffset = self.bitPos % 8
+        local bitToWrite = bit.band(bit.rshift(value, i), 1)
+
+        self.data[byteIndex] = self.data[byteIndex] or 0
+        self.data[byteIndex] = bit.bor(self.data[byteIndex], bit.lshift(bitToWrite, 7 - bitOffset))
+
+        self.bitPos = self.bitPos + 1
+    end
+end
+
+function BitStream:readBits(numBits)
+    local value = 0
+    for i = numBits - 1, 0, -1 do
+        local byteIndex = math.floor(self.bitPos / 8) + 1
+        local bitOffset = self.bitPos % 8
+        local bitValue = bit.band(bit.rshift(self.data[byteIndex], 7 - bitOffset), 1)
+
+        value = bit.bor(value, bit.lshift(bitValue, i))
+        self.bitPos = self.bitPos + 1
+    end
+    return value
+end
+
+function BitStream:writeUInt(value, numBits)
+    local numBytes = math.floor(numBits / 8)
+
+    for i = 0, numBytes - 1 do
+        local byte = bit.band(bit.rshift(value, (numBytes - i - 1) * 8), 0xFF)
+        self:writeByte(byte)
+    end
+end
+
+function BitStream:readUInt(numBits)
+    local value = 0
+    local numBytes = math.floor(numBits / 8)
+    
+    for i = 0, numBytes - 1 do
+        local byte = self:readByte()
+        value = bit.bor(value, bit.lshift(byte, (numBytes - i - 1) * 8))
+    end
+
+    return value
+end
+
+function BitStream:writeInt(value, numBits)
+    if value < 0 then value = value + bit.lshift(1, numBits) end
+    self:writeUInt(value, numBits)
+end
+
+function BitStream:readInt(numBits)
+    local value = self:readUInt(numBits)
+    local maxVal = bit.lshift(1, numBits - 1)
+    if value >= maxVal then value = value - bit.lshift(1, numBits) end
+    return value
+end
+
+function BitStream:writeByte(value)
+    self:writeBits(value, 8)
+end
+
+function BitStream:readByte()
+    return self:readBits(8)
+end
+
+function BitStream:writeBytes(bytes)
+    for i = 1, #bytes do
+        self:writeByte(bytes:byte(i))
+    end
+end
+
+function BitStream:readBytes(numBytes)
+    local bytes = {}
+    for i = 1, numBytes do
+        table.insert(bytes, string.char(self:readByte()))
+    end
+    return table.concat(bytes)
+end
+
+function BitStream:writeFloat(value)
+    local sign = 0
+    if value < 0 then
+        sign = 1
+        value = -value
+    end
+
+    local mantissa, exponent = math.frexp(value)
+    mantissa = (mantissa * 2 - 1) * math.ldexp(0.5, 24)
+    exponent = exponent + 126
+
+    local b1 = bit.bor(bit.lshift(sign, 7), bit.rshift(exponent, 1))
+    local b2 = bit.bor(bit.lshift(bit.band(exponent, 1), 7), bit.rshift(mantissa, 16))
+    local b3 = bit.band(bit.rshift(mantissa, 8), 0xFF)
+    local b4 = bit.band(mantissa, 0xFF)
+
+    self:writeByte(b1)
+    self:writeByte(b2)
+    self:writeByte(b3)
+    self:writeByte(b4)
+end
+
+function BitStream:readFloat()
+    local b1 = self:readByte()
+    local b2 = self:readByte()
+    local b3 = self:readByte()
+    local b4 = self:readByte()
+
+    local sign = bit.rshift(b1, 7)
+    local exponent = bit.band(bit.lshift(b1, 1), 0xFF) + bit.rshift(b2, 7) - 127
+    local mantissa = bit.bor(bit.lshift(bit.band(b2, 0x7F), 16), bit.lshift(b3, 8), b4) + math.ldexp(1, 23)
+    local value = math.ldexp(mantissa, exponent - 23)
+    
+    if sign == 1 then value = -value end
+    return value
+end
+
+function BitStream:reset()
+    self.data = {}
+    self.bitPos = 0
+end
+
+function BitStream:align()
+    local bitOffset = self.bitPos % 8
+
+    if bitOffset > 0 then
+        local bitsToAlign = 8 - bitOffset
+        self.bitPos = self.bitPos + bitsToAlign
+    end
+end
+
+function BitStream:tostring()
+    local output = {}
+    for _, byte in ipairs(self.data) do
+        table.insert(output, string.char(byte))
+    end
+    return table.concat(output)
+end
