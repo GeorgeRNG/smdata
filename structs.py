@@ -31,6 +31,9 @@ class ByteByByte:
     def reader(value: ReadableSource):
         return ByteByByte(value) if isinstance(value, bytes) else value
 
+    def done(self) -> bool:
+        return self.offset >= len(self)
+
     def __bytes__(self):
         return self.data
 
